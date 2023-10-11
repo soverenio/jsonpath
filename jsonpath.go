@@ -5,8 +5,11 @@ import (
 	"sync"
 )
 
-var parseMutex sync.Mutex
-var parser = pegJSONPathParser{}
+var pool = sync.Pool{
+	New: func() interface{} {
+		return &pegJSONPathParser{}
+	},
+}
 var unescapeRegex = regexp.MustCompile(`\\(.)`)
 
 // Retrieve returns the retrieved JSON using the given JSONPath.
@@ -20,7 +23,7 @@ func Retrieve(jsonPath string, src interface{}, config ...Config) ([]interface{}
 
 // Parse returns the parser function using the given JSONPath.
 func Parse(jsonPath string, config ...Config) (f func(src interface{}) ([]interface{}, error), err error) {
-	parseMutex.Lock()
+	var parser = pool.Get().(*pegJSONPathParser)
 	defer func() {
 		if exception := recover(); exception != nil {
 			if _err, ok := exception.(error); ok {
@@ -28,7 +31,7 @@ func Parse(jsonPath string, config ...Config) (f func(src interface{}) ([]interf
 			}
 		}
 		parser.jsonPathParser = jsonPathParser{}
-		parseMutex.Unlock()
+		pool.Put(parser)
 	}()
 
 	parser.Buffer = jsonPath
